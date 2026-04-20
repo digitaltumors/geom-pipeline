@@ -6,8 +6,8 @@ authors = [
 ]
 description = "Pipeline to process the 3D structures from the GEOM database"
 license = "MIT"
-channels = ["conda-forge", "bioconda"]
-platforms = ["osx-arm64", "linux-64", "win-64", "osx-64"]
+channels = ["conda-forge", "bioconda","pypi"]
+platforms = ["osx-arm64"]
 
 [environments]
 quality = { features = ["quality"], solve-group = "default" }
@@ -24,14 +24,25 @@ env.RESULTS = "${PIXI_PROJECT_ROOT}/data/results"
 env.SCRIPTS = "${PIXI_PROJECT_ROOT}/workflow/scripts"
 
 [dependencies]
-python = ">=3.12"
+python = ">=3.14.3,<3.15"
 ipython = "*"
 ipykernel = "*"
 jupyterlab = "*"
 pip = "*"
+pubchempy = ">=1.0.5,<2"
+tqdm = ">=4.67.3,<5"
 
 [pypi-dependencies]
 damply = ">=0.10.0, <0.11"
+msgpack = ">=1.1.2, <2"
+numpy = ">=2.4.2, <3"
+pandas = ">=3.0.1, <4"
+rdkit = ">=2025.9.5, <2026"
+pyopenssl = ">=25.3.0, <26"
+ndg-httpsclient = ">=0.5.1, <0.6"
+pyasn1 = ">=0.6.2, <0.7"
+urllib3 = ">=2.6.3, <3"
+
 
 [tasks]
 example_script = {cmd="python $SCRIPTS/example_script.py", description="Run an example script"}

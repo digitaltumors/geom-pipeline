@@ -1,0 +1,13 @@
+name: "GEOM Data Pipeline"
+description: "Pipeline to process the GEOM dataset into a multi-assay experiment object in R"
+
+
+data_fectching:
+  dataverse: "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/JNGTDF"
+  rdkit_location: "https://dataverse.harvard.edu/api/access/datafile/4327252"
+
+
+
+file_names:
+  qm9: "summary_qm9.json"
+  drugs: "summary_drugs.json"
