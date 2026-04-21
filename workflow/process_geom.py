@@ -9,27 +9,22 @@
 ####
 
 
-import os
-from pathlib import Path
-from typing import List
 import json
-import pubchempy as pcp
-import sys
-from collections import defaultdict
-import tqdm
-import time
-import pandas as pd
-from typing import Dict, List, Union
-from rdkit.Chem.rdMolDescriptors import CalcWHIM
-from pathlib import Path
-from damply import dirs
+import os
 
 # import flags
-import utils
 import os.path
 import pickle
-import numpy as np
+import time
+from collections import defaultdict
+from typing import Dict
 
+import numpy as np
+import pandas as pd
+import pubchempy as pcp
+import tqdm
+from damply import dirs
+from rdkit.Chem.rdMolDescriptors import CalcWHIM
 
 RENAME_FIELDS = {
 	'totalconfs': 'Total Conformations',
@@ -71,7 +66,7 @@ def update_colData(colData: Dict, smiles: str, mol: Dict) -> int:
 	colData['INCHI-KEY'].append(inchi)
 
 	for field in RENAME_FIELDS:
-		if field in mol.keys():  # if this value has a measurement for the molecule
+		if field in mol:  # if this value has a measurement for the molecule
 			val = mol[field]
 		else:
 			val = 'NA'
