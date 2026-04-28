@@ -19,8 +19,6 @@ selection:
   max_compounds_per_subset: null
 
 sources:
-  # Human readable GEOM Dataverse landing page
-  geom_url: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/JNGTDF
   # GEOM RDKit conformer archive
   rdkit_url: https://dataverse.harvard.edu/api/access/datafile/4327252
   # Optional MoleculeNet archive

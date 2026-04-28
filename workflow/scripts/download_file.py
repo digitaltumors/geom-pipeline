@@ -51,6 +51,6 @@ download_to_path(source_url, output_path)
 print(
 	'[download_file] '
 	f'output={output_path} size_bytes={output_path.stat().st_size} '
-	f'url={source_url} dataset_url={snakemake.params.get("dataset_url", "")}',
+	f'url={source_url}',
 	flush=True,
 )

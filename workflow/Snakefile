@@ -46,7 +46,6 @@ dataset_cfg["subsets"] = config.get("subsets", dataset_cfg["subsets"])
 selection_cfg["max_compounds_per_subset"] = config.get(
     "max_compounds_per_subset", selection_cfg["max_compounds_per_subset"]
 )
-sources_cfg["geom_url"] = config.get("geom_url", sources_cfg["geom_url"])
 sources_cfg["rdkit_url"] = config.get("rdkit_url", sources_cfg["rdkit_url"])
 sources_cfg["moleculenet_url"] = config.get(
     "moleculenet_url", sources_cfg["moleculenet_url"]
@@ -63,7 +62,6 @@ SUBSETS = normalize_subsets(dataset_cfg["subsets"])
 MAX_COMPOUNDS_PER_SUBSET = normalize_optional_int(
     selection_cfg["max_compounds_per_subset"]
 )
-GEOM_URL = sources_cfg["geom_url"].rstrip("/")
 RDKIT_ARCHIVE_URL = sources_cfg["rdkit_url"].rstrip("/")
 MOLECULENET_ARCHIVE_URL = sources_cfg["moleculenet_url"].rstrip("/")
 ANNOTATIONDB_URL = f"{config['annotationdb_api'].rstrip('/')}/compound/all"
@@ -111,7 +109,6 @@ rule download_rdkit_archive:
         RDKIT_ARCHIVE,
     params:
         source_url=RDKIT_ARCHIVE_URL,
-        dataset_url=GEOM_URL,
     script:
         "scripts/download_file.py"
 
@@ -150,7 +147,6 @@ rule download_moleculenet_archive:
         MOLECULENET_ARCHIVE,
     params:
         source_url=MOLECULENET_ARCHIVE_URL,
-        dataset_url=GEOM_URL,
     script:
         "scripts/download_file.py"
 
