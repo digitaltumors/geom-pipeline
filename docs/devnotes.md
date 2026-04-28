@@ -1,55 +1,34 @@
 # Developer Notes
 
-## Purpose of This Section
+## Environment Decisions
 
-This section is for documenting technical decisions, challenges, and solutions encountered during your project. These notes are valuable for:
+- The default runtime is pinned to Python 3.12.
+- This is intentional: current conda `snakemake` builds on `osx-arm64` solve cleanly with Python 3.12.
+- Core scientific packages and Snakemake are kept in Pixi conda dependencies.
 
-- Future you (who will forget why certain decisions were made)
-- Collaborators who join the project later
-- People coming from your publication who want to reproduce your work
-- Anyone who might want to extend your research
+## Workflow Decisions
 
-## What to Document
+- The root `Snakefile` delegates to `workflow/Snakefile`.
+- Raw GEOM inputs are downloaded into `data/rawdata/` from Harvard Dataverse.
+- The HDD-facing default curates only the `drugs` subset from the downloaded `rdkit_folder.tar.gz` archive.
+- `qm9` and `moleculenet` remain config-valid side-product subsets, but they are not part of the default HDD-facing output.
 
-### Design Decisions
+## Identifier Decisions
 
-Document important decisions about your project's architecture, algorithms, or methodologies:
+- The compound-level MAE key is `GEOM.Source.SMILES`, using GEOM's own source SMILES key.
+- The pipeline errors if `GEOM.Source.SMILES` is missing or duplicated instead of generating a replacement identifier.
+- Public columns with HDD-shared names are intended to be directly joinable to the base HDD; source-specific fields use source-specific prefixes.
 
-``` markdown
-## Choice of RNA-Seq Analysis Pipeline
+## Metadata Decisions
 
-[2025-04-25] We chose the kallisto over STAR pipeline for the following reasons:
-    1. The CCLE dataset is very large, and kallisto is faster for quantifying large datasets
-    2. GDSC used kallisto, so we can compare our results with theirs
-```
+- RDKit derives `Metadata_SMILES`, `Metadata_InChI`, and `Metadata_InChIKey` locally from stored conformer molecules.
+- AnnotationDB enrichment is intentionally minimal: PubChem CID, AnnotationDB name, AnnotationDB SMILES, and a match flag.
+- The AnnotationDB `/compound/all` response is cached once at `data/rawdata/metadata/all_adb_compounds.csv` and downstream joins read the cache.
+- Pickle paths are kept only as internal manifest fields needed to locate GEOM files during processing. They are dropped from compound metadata, conformer metadata, MAE `colData`, MAE metadata, and public table exports.
+- Public-facing tables drop bulky bookkeeping and raw JSON payload columns.
 
-### Technical Challenges
+## Output Decisions
 
-Record significant problems you encountered and how you solved them
-
-``` markdown
-## Sample Name Format Issue
-
-[2025-04-25] We encountered a problem with sample name formats between the CCLE and GDSC datasets.
-    The CCLE dataset uses "BRCA-XX-XXXX" format, while the GDSC dataset uses "BRCA-XX-XXXX-XX".
-    We had to write a script to remove the last two characters from the sample names in the GDSC dataset.
-```
-
-### Dependencies and Environment
-
-Document specific version requirements or compatibility issues:
-
-``` markdown
-## Critical Version Dependencies
-
-[2025-04-25] SimpleITK 2.4.1 introduced a bug that flips images, so we froze version 2.4.0
-```
-
-## Best Practices
-
-- Date your entries when appropriate
-- Link to relevant code files or external resources
-- Include small code snippets when helpful
-- Note alternatives you considered and why they were rejected
-- Document failed approaches to prevent others from repeating mistakes
-- Update notes when major changes are made to the approach
+- The three assays are WHIM summaries, not a top-three conformer selection: `WHIM_hp`, `WHIMS_avg`, and `WHIMS_wavg`.
+- `conformer_metadata.tsv` preserves per-conformer GEOM metadata whether or not the conformer is valid for WHIM aggregation.
+- Output headers are normalized to public dot-style names only at MAE/export boundaries; internal intermediates may retain source-style names for traceability.

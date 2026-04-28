@@ -1,13 +1,31 @@
-name: "GEOM Data Pipeline"
-description: "Pipeline to process the GEOM dataset into a multi-assay experiment object in R"
+# Pipeline directory layout
+paths:
+  raw_dir: data/rawdata
+  proc_dir: data/procdata
+  results_dir: data/results
 
+dataset:
+  # Stable identifier used in final result filenames
+  id: geom
+  version: v2.0.0
+  # GEOM subsets to process
+  subsets:
+    - drugs
+    # - qm9
+    # - moleculenet
 
-data_fectching:
-  dataverse: "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/JNGTDF"
-  rdkit_location: "https://dataverse.harvard.edu/api/access/datafile/4327252"
+selection:
+  # Set to null to process every compound in each selected subset
+  max_compounds_per_subset: null
 
+sources:
+  # Human readable GEOM Dataverse landing page
+  geom_url: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/JNGTDF
+  # GEOM RDKit conformer archive
+  rdkit_url: https://dataverse.harvard.edu/api/access/datafile/4327252
+  # Optional MoleculeNet archive
+  moleculenet_url: https://dataverse.harvard.edu/api/access/datafile/5858506
 
-
-file_names:
-  qm9: "summary_qm9.json"
-  drugs: "summary_drugs.json"
+# Base AnnotationDB API URL
+# The workflow appends /compound/all
+annotationdb_api: https://v2annotationdb.bhklab.ca

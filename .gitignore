@@ -191,6 +191,9 @@ cython_debug/
 # Pixi package manager
 .pixi
 
+# Snakemake runtime state
+.snakemake/
+
 #############################################################################
 # 3. R RELATED FILES
 #############################################################################
@@ -382,3 +385,5 @@ site/
 # models/
 # sandbox/
 # etc.
+
+docs/TODO.md

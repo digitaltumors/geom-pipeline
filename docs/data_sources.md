@@ -1,74 +1,91 @@
 # Data Sources
 
-## Overview
+## GEOM Input Data
 
-This section should document all data sources used in your project.
-Proper documentation ensures reproducibility and helps others
-understand your research methodology.
+- **Name**: GEOM: energy-annotated molecular conformations
+- **Primary format used here**: `rdkit_folder.tar.gz` downloaded into
+  `data/rawdata/` and extracted locally
+- **Upstream project**: [learningmatter-mit/geom](https://github.com/learningmatter-mit/geom)
+- **Citation**: Axelrod S, Gómez-Bombarelli R. *GEOM, energy-annotated
+  molecular conformations for property prediction and molecular generation*.
+  Scientific Data 9, 185 (2022).
+- **License**: CC0 1.0 Universal, according to the data drop README bundled with
+  the Dataverse data bundle.
 
-## How to Document Your Data
+## Download Sources
 
-For each data source, include the following information:
+- Harvard Dataverse dataset page:
+  `https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/JNGTDF`
+- RDKit archive:
+  `https://dataverse.harvard.edu/api/access/datafile/4327252`
+- MoleculeNet archive:
+  `https://dataverse.harvard.edu/api/access/datafile/5858506`
 
-### 1. External Data Sources
+These direct links remain in `config/pipeline.yaml` and are the default source
+for raw data.
 
-- **Name**: Official name of the dataset
-- **Version/Date**: Version number or access date
-- **URL**: Link to the data source
-- **Access Method**: How the data was obtained (direct download, API, etc.)
-- **Access Date**: When the data was accessed/retrieved
-- **Data Format**: Format of the data (FASTQ, DICOM, CSV, etc.)
-- **Citation**: Proper academic citation if applicable
-- **License**: Usage restrictions and attribution requirements
+## Expected Local Layout
 
-Example:
+The workflow downloads into `data/rawdata/` and extracts the RDKit archive to:
 
-```markdown
-## TCGA RNA-Seq Data
-
-- **Name**: The Cancer Genome Atlas RNA-Seq Data
-- **Version**: Data release 28.0 - March 2021
-- **URL**: https://portal.gdc.cancer.gov/
-- **Access Method**: GDC Data Transfer Tool
-- **Access Date**: 2021-03-15
-- **Citation**: The Cancer Genome Atlas Network. (2012). Comprehensive molecular portraits of human breast tumours. Nature, 490(7418), 61-70.
-- **License**: [NIH Genomic Data Sharing Policy](https://sharing.nih.gov/genomic-data-sharing-policy)
+```text
+data/rawdata/rdkit_folder
 ```
 
-### 2. Internal/Generated Data
+Required files for the curated `drugs` and `qm9` path:
 
-- **Name**: Descriptive name of the dataset
-- **Creation Date**: When the data was generated
-- **Creation Method**: Brief description of how the data was created
-- **Input Data**: What source data was used
-- **Processing Scripts**: References to scripts/Github Repo used to generate this data
+- `summary_drugs.json`
+- `summary_qm9.json`
+- `drugs/*.pickle`
+- `qm9/*.pickle`
 
-Example:
+The optional `moleculenet` subset currently downloads the upstream
+`molecule_net.tar.gz` archive into `data/rawdata/` but does not yet feed the
+main curation tables.
 
-```markdown
-## Processed RNA-Seq Data
-- **Name**: Processed RNA-Seq Data for TCGA-BRCA
-- **Creation Date**: 2021-04-01
-- **Creation Method**: Processed using kallisto and DESeq2
-- **Input Data**: FASTQ Data obtained from the SRA database
-- **Processing Scripts**: [GitHub Repo](https://github.com/tcga-brca-rnaseq)
-```
+## Large-File Considerations
 
-### 3. Data Dictionary
+The upstream GEOM files are large:
 
-For complex datasets, include a data dictionary that explains:
+- `rdkit_folder.tar.gz` at about 50.1 GB
+- `drugs_crude.msgpack.tar.gz` at about 42.7 GB
+- `molecule_net.tar.gz` at about 2.2 GB
+- `rdkit_folder/summary_drugs.json` at about 168 MB
+- `rdkit_folder/summary_qm9.json` at about 48 MB
 
-| Column Name | Data Type | Description | Units | Possible Values |
-|-------------|-----------|-------------|-------|-----------------|
-| patient_id  | string    | Unique patient identifier | N/A | TCGA-XX-XXXX format |
-| age         | integer   | Patient age at diagnosis | years | 18-100 |
-| expression  | float     | Gene expression value | TPM | Any positive value |
+These sizes matter operationally:
 
-## Best Practices
+- make sure `data/rawdata/` has sufficient free space before a real run
+- all processed tables are written to `data/procdata/`
 
-- Store raw data in `data/rawdata/` and never modify it
-- Store processed data in `data/procdata/` and all code used to generate it should be in `workflow/scripts/`
-- Document all processing steps
-- Track data provenance (where data came from and how it was modified)
-- Respect data usage agreements and licenses!
-    This is especially important for data that should not be shared publicly
+## AnnotationDB Enrichment
+
+Compound enrichment uses the configurable AnnotationDB API base URL:
+
+- config key: `annotationdb_api`
+- default: `https://v2annotationdb.bhklab.ca`
+- workflow endpoint: `<annotationdb_api>/compound/all`
+
+The workflow caches the bulk response as
+`data/rawdata/metadata/all_adb_compounds.csv` and joins it locally by
+`Metadata_InChIKey`.
+
+The cached table keeps only the normalized join and display fields:
+`inchikey`, `cid`, `name`, and `smiles`. Processed metadata renames these to the
+pipeline's internal `AnnotationDB_*` fields before MAE construction.
+
+## Generated Data Products
+
+The workflow generates:
+
+- `data/procdata/metadata/geom_manifest.tsv`
+- `data/procdata/metadata/geom_manifest_summary.tsv`
+- `data/procdata/metadata/compound_master.tsv`
+- `data/procdata/metadata/drug_metadata_raw.tsv`
+- `data/procdata/metadata/colData_raw.csv`
+- `data/procdata/conformers/conformer_metadata.tsv`
+- `data/procdata/assays/WHIM_hp.csv`
+- `data/procdata/assays/WHIMS_avg.csv`
+- `data/procdata/assays/WHIMS_wavg.csv`
+
+Final MAE-derived exports use public dot-style headers.

@@ -1,0 +1,232 @@
+def normalize_path(value):
+    return str(value).rstrip("/")
+
+
+def normalize_subsets(value):
+    if isinstance(value, str):
+        parsed = [item.strip() for item in value.split(",") if item.strip()]
+    else:
+        parsed = [str(item).strip() for item in value if str(item).strip()]
+
+    if not parsed:
+        raise ValueError("dataset.subsets must include at least one subset")
+
+    allowed = {"drugs", "qm9", "moleculenet"}
+    invalid = sorted(set(parsed) - allowed)
+    if invalid:
+        raise ValueError(
+            "Unsupported dataset.subsets values: "
+            f"{', '.join(invalid)}. Allowed values: drugs, qm9, moleculenet."
+        )
+
+    return parsed
+
+
+def normalize_optional_int(value):
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in {"", "none", "null"}:
+        return None
+    return int(value)
+
+
+paths_cfg = dict(config["paths"])
+dataset_cfg = dict(config["dataset"])
+selection_cfg = dict(config["selection"])
+sources_cfg = dict(config["sources"])
+
+paths_cfg["raw_dir"] = config.get(
+    "raw_dir", paths_cfg.get("raw_dir", paths_cfg.get("rawdata_dir"))
+)
+paths_cfg["proc_dir"] = config.get("proc_dir", paths_cfg["proc_dir"])
+paths_cfg["results_dir"] = config.get(
+    "results_dir", paths_cfg.get("results_dir", "data/results")
+)
+dataset_cfg["subsets"] = config.get("subsets", dataset_cfg["subsets"])
+selection_cfg["max_compounds_per_subset"] = config.get(
+    "max_compounds_per_subset", selection_cfg["max_compounds_per_subset"]
+)
+sources_cfg["geom_url"] = config.get("geom_url", sources_cfg["geom_url"])
+sources_cfg["rdkit_url"] = config.get("rdkit_url", sources_cfg["rdkit_url"])
+sources_cfg["moleculenet_url"] = config.get(
+    "moleculenet_url", sources_cfg["moleculenet_url"]
+)
+
+RAWDATA_DIR = normalize_path(paths_cfg["raw_dir"])
+PROC_DIR = normalize_path(paths_cfg["proc_dir"])
+RESULTS_DIR = normalize_path(paths_cfg["results_dir"])
+RAW_METADATA_DIR = f"{RAWDATA_DIR}/metadata"
+PROC_METADATA_DIR = f"{PROC_DIR}/metadata"
+DATASET_ID = dataset_cfg.get("id", "geom")
+DATASET_VERSION = dataset_cfg.get("version", "v0.1.0")
+SUBSETS = normalize_subsets(dataset_cfg["subsets"])
+MAX_COMPOUNDS_PER_SUBSET = normalize_optional_int(
+    selection_cfg["max_compounds_per_subset"]
+)
+GEOM_URL = sources_cfg["geom_url"].rstrip("/")
+RDKIT_ARCHIVE_URL = sources_cfg["rdkit_url"].rstrip("/")
+MOLECULENET_ARCHIVE_URL = sources_cfg["moleculenet_url"].rstrip("/")
+ANNOTATIONDB_URL = f"{config['annotationdb_api'].rstrip('/')}/compound/all"
+ANNOTATIONDB_OVERWRITE = False
+
+PROCESSED_SUBSETS = [subset for subset in SUBSETS if subset in {"drugs", "qm9"}]
+MOLECULENET_SELECTED = "moleculenet" in SUBSETS
+
+RDKIT_ARCHIVE = f"{RAWDATA_DIR}/rdkit_folder.tar.gz"
+MOLECULENET_ARCHIVE = f"{RAWDATA_DIR}/molecule_net.tar.gz"
+RDKIT_ROOT = f"{RAWDATA_DIR}/rdkit_folder"
+SUMMARY_JSONS = {
+    subset: f"{RDKIT_ROOT}/summary_{subset}.json" for subset in PROCESSED_SUBSETS
+}
+
+MANIFEST_TSV = f"{PROC_METADATA_DIR}/geom_manifest.tsv"
+MANIFEST_SUMMARY_TSV = f"{PROC_METADATA_DIR}/geom_manifest_summary.tsv"
+ANNOTATIONDB_CACHE = f"{RAW_METADATA_DIR}/all_adb_compounds.csv"
+COMPOUND_MASTER = f"{PROC_METADATA_DIR}/compound_master.tsv"
+COMPOUND_METADATA = f"{PROC_METADATA_DIR}/drug_metadata_raw.tsv"
+CONFORMER_METADATA = f"{PROC_DIR}/conformers/conformer_metadata.tsv"
+COL_DATA = f"{PROC_METADATA_DIR}/colData_raw.csv"
+WHIM_HP = f"{PROC_DIR}/assays/WHIM_hp.csv"
+WHIMS_AVG = f"{PROC_DIR}/assays/WHIMS_avg.csv"
+WHIMS_WAVG = f"{PROC_DIR}/assays/WHIMS_wavg.csv"
+MAE_RDS = f"{RESULTS_DIR}/{DATASET_ID}_MultiAssayExperiment.rds"
+TABLE_DIR = f"{RESULTS_DIR}/{DATASET_ID}_tables"
+TABLE_ARCHIVE = f"{RESULTS_DIR}/{DATASET_ID}_tables.tar.gz"
+
+FINAL_TARGETS = [
+    MAE_RDS,
+    TABLE_ARCHIVE,
+]
+ALL_TARGETS = [*FINAL_TARGETS] if PROCESSED_SUBSETS else []
+if MOLECULENET_SELECTED:
+    ALL_TARGETS.append(MOLECULENET_ARCHIVE)
+
+if not ALL_TARGETS:
+    raise ValueError(
+        "No runnable targets were selected. Choose at least one of drugs, qm9, or moleculenet."
+    )
+
+
+rule download_rdkit_archive:
+    output:
+        RDKIT_ARCHIVE,
+    params:
+        source_url=RDKIT_ARCHIVE_URL,
+        dataset_url=GEOM_URL,
+    script:
+        "scripts/download_file.py"
+
+
+rule extract_rdkit_folder:
+    input:
+        archive=RDKIT_ARCHIVE,
+    output:
+        summary_drugs=f"{RDKIT_ROOT}/summary_drugs.json",
+        summary_qm9=f"{RDKIT_ROOT}/summary_qm9.json",
+    params:
+        rawdata_dir=RAWDATA_DIR,
+    shell:
+        """
+        mkdir -p {params.rawdata_dir}
+        tar -xzf {input.archive} -C {params.rawdata_dir}
+        """
+
+
+checkpoint build_geom_manifest:
+    input:
+        summary_jsons=list(SUMMARY_JSONS.values()),
+    output:
+        manifest_tsv=MANIFEST_TSV,
+        summary_tsv=MANIFEST_SUMMARY_TSV,
+    params:
+        rdkit_root=RDKIT_ROOT,
+        max_compounds_per_subset=MAX_COMPOUNDS_PER_SUBSET,
+        subsets=PROCESSED_SUBSETS,
+    script:
+        "scripts/build_manifest.py"
+
+
+rule download_moleculenet_archive:
+    output:
+        MOLECULENET_ARCHIVE,
+    params:
+        source_url=MOLECULENET_ARCHIVE_URL,
+        dataset_url=GEOM_URL,
+    script:
+        "scripts/download_file.py"
+
+
+rule fetch_annotationdb_compounds:
+    output:
+        cache_csv=ANNOTATIONDB_CACHE,
+    params:
+        source_uri=ANNOTATIONDB_URL,
+        overwrite=lambda _wildcards: ANNOTATIONDB_OVERWRITE,
+    script:
+        "scripts/fetch_annotationdb_compounds.R"
+
+
+rule process_geom:
+    input:
+        manifest_tsv=lambda _wildcards: checkpoints.build_geom_manifest.get().output.manifest_tsv,
+        summary_tsv=lambda _wildcards: checkpoints.build_geom_manifest.get().output.summary_tsv,
+    output:
+        compound_master=COMPOUND_MASTER,
+        conformer_metadata=CONFORMER_METADATA,
+        whim_hp=WHIM_HP,
+        whims_avg=WHIMS_AVG,
+        whims_wavg=WHIMS_WAVG,
+    params:
+        rdkit_root=RDKIT_ROOT,
+    script:
+        "scripts/process_geom.py"
+
+
+rule build_compound_metadata:
+    input:
+        compound_master=COMPOUND_MASTER,
+        annotationdb_cache=ANNOTATIONDB_CACHE,
+    output:
+        compound_metadata=COMPOUND_METADATA,
+        coldata=COL_DATA,
+    script:
+        "scripts/build_compound_metadata.py"
+
+
+rule build_multiassayexperiment:
+    input:
+        compound_metadata=COMPOUND_METADATA,
+        whim_hp=WHIM_HP,
+        whims_avg=WHIMS_AVG,
+        whims_wavg=WHIMS_WAVG,
+        configfile="config/pipeline.yaml",
+    output:
+        mae_rds=MAE_RDS,
+    params:
+        dataset_id=DATASET_ID,
+        dataset_version=DATASET_VERSION,
+    script:
+        "scripts/build_mae.R"
+
+
+rule export_mae_tables:
+    input:
+        mae_rds=MAE_RDS,
+        configfile="config/pipeline.yaml",
+    output:
+        outdir=directory(TABLE_DIR),
+    script:
+        "scripts/export_mae_tables.R"
+
+
+rule archive_mae_tables:
+    input:
+        outdir=TABLE_DIR,
+    output:
+        archive=TABLE_ARCHIVE,
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p "$(dirname "{output.archive}")"
+        COPYFILE_DISABLE=1 tar -C "{RESULTS_DIR}" -cf - "$(basename "{input.outdir}")" | gzip -9 > "{output.archive}"
+        """
