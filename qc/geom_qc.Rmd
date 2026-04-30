@@ -14,6 +14,17 @@ This notebook demonstrates the structure and basic use of the final
 `MultiAssayExperiment` containing GEOM-derived WHIM descriptor assays and
 compound annotations.
 
+WHIM, or Weighted Holistic Invariant Molecular, descriptors summarize 3D 
+molecular shape from conformer coordinates. In the pipeline, RDKit computes 
+WHIM descriptors for GEOM conformers with valid Boltzmann weights, and the assay 
+matrices store three compound-level summaries: the highest-probability 
+conformer (`WHIM_hp`), the arithmetic mean across valid conformers (`WHIM_avg`), 
+and the Boltzmann-weighted mean across valid conformers (`WHIM_wavg`).
+
+WHIM descriptors were introduced by Todeschini, Gramatica, Provenzani, and
+Marengo in *Chemometrics and Intelligent Laboratory Systems*:
+<https://doi.org/10.1016/0169-7439(95)80026-6>.
+
 ## Setup
 
 ```{r setup, include=FALSE}
@@ -190,8 +201,14 @@ overview_tbl <- tibble(
     fmt_count(sum(assay_summary$compounds)),
     fmt_count(sum(!is.na(compound_metadata$Pubchem.CID))),
     fmt_count(sum(is.na(compound_metadata$Pubchem.CID))),
-    fmt_count(stats::median(compound_metadata$GEOM.Total.Conformers, na.rm = TRUE)),
-    fmt_count(stats::median(compound_metadata$GEOM.Unique.Conformers, na.rm = TRUE))
+    fmt_count(stats::median(
+      compound_metadata$GEOM.Total.Conformers,
+      na.rm = TRUE
+    )),
+    fmt_count(stats::median(
+      compound_metadata$GEOM.Unique.Conformers,
+      na.rm = TRUE
+    ))
   )
 )
 
@@ -332,7 +349,10 @@ conformer_summary_tbl <- compound_metadata |>
     total_conformer_mean = mean(GEOM.Total.Conformers, na.rm = TRUE),
     total_conformer_max = max(GEOM.Total.Conformers, na.rm = TRUE),
     unique_conformer_min = min(GEOM.Unique.Conformers, na.rm = TRUE),
-    unique_conformer_median = stats::median(GEOM.Unique.Conformers, na.rm = TRUE),
+    unique_conformer_median = stats::median(
+      GEOM.Unique.Conformers,
+      na.rm = TRUE
+    ),
     unique_conformer_mean = mean(GEOM.Unique.Conformers, na.rm = TRUE),
     unique_conformer_max = max(GEOM.Unique.Conformers, na.rm = TRUE)
   ) |>
@@ -460,27 +480,6 @@ assay_quality_tbl <- bind_rows(
 kable(assay_quality_tbl)
 ```
 
-```{r descriptor-distribution, fig.height=5.5}
-descriptor_sample_tbl <- bind_rows(
-  lapply(assay_names, \(assay_name) {
-    tibble(
-      assay = assay_name,
-      value = sample_values(assay_mats[[assay_name]], n = 100000L)
-    )
-  })
-)
-
-ggplot(descriptor_sample_tbl, aes(x = value, fill = assay)) +
-  geom_histogram(bins = 70, color = "white", show.legend = FALSE) +
-  facet_wrap(~assay, scales = "free") +
-  scale_y_log10(labels = scales::comma) +
-  labs(
-    title = "Sampled WHIM descriptor value distributions",
-    x = "Descriptor value",
-    y = "Sampled entries"
-  )
-```
-
 ```{r feature-variability, include=FALSE}
 feature_stats <- bind_rows(
   lapply(assay_names, \(assay_name) {
@@ -535,8 +534,7 @@ umap_compounds <- umap_compound_source |>
 umap_input <- do.call(
   cbind,
   lapply(assay_names, \(assay_name) {
-    mat <- assay_mats[[assay_name]][
-      ,
+    mat <- assay_mats[[assay_name]][,
       umap_compounds$GEOM.Source.SMILES,
       drop = FALSE
     ]
@@ -604,10 +602,10 @@ per-compound descriptor-vector distances between assay pairs.
 
 ```{r assay-pair-distances, fig.height=5.5, fig.width=9}
 assay_pairs <- tribble(
-  ~pair, ~assay_a, ~assay_b, ~denominator_assay,
-  "WHIM_hp vs WHIMS_avg", "WHIM_hp", "WHIMS_avg", "WHIMS_avg",
-  "WHIM_hp vs WHIMS_wavg", "WHIM_hp", "WHIMS_wavg", "WHIMS_wavg",
-  "WHIMS_avg vs WHIMS_wavg", "WHIMS_avg", "WHIMS_wavg", "WHIMS_avg"
+  ~pair                     , ~assay_a    , ~assay_b     , ~denominator_assay ,
+  "WHIM_hp vs WHIMS_avg"    , "WHIM_hp"   , "WHIMS_avg"  , "WHIMS_avg"        ,
+  "WHIM_hp vs WHIMS_wavg"   , "WHIM_hp"   , "WHIMS_wavg" , "WHIMS_wavg"       ,
+  "WHIMS_avg vs WHIMS_wavg" , "WHIMS_avg" , "WHIMS_wavg" , "WHIMS_avg"
 )
 
 assay_distance_tbl <- bind_rows(
@@ -624,10 +622,11 @@ assay_distance_tbl <- bind_rows(
 
     tibble(
       pair = assay_pairs$pair[[index]],
-      normalized_distance = absolute_distance / pmax(
-        denominator_norm,
-        .Machine$double.eps
-      )
+      normalized_distance = absolute_distance /
+        pmax(
+          denominator_norm,
+          .Machine$double.eps
+        )
     )
   })
 )
@@ -690,7 +689,10 @@ heatmap_tbl <- as.data.frame(heatmap_scaled) |>
     values_to = "Scaled.Value"
   ) |>
   mutate(
-    Feature.Key = factor(Feature.Key, levels = rev(top_heatmap_features$Feature.Key)),
+    Feature.Key = factor(
+      Feature.Key,
+      levels = rev(top_heatmap_features$Feature.Key)
+    ),
     GEOM.Source.SMILES = factor(
       GEOM.Source.SMILES,
       levels = top_heatmap_compounds
@@ -787,7 +789,10 @@ tibble(
 
 ```{r modeling-matrix}
 tibble(
-  object = c("WHIM_hp feature_by_compound_matrix", "WHIM_hp compound_by_feature_matrix"),
+  object = c(
+    "WHIM_hp feature_by_compound_matrix",
+    "WHIM_hp compound_by_feature_matrix"
+  ),
   rows = c(nrow(assay_mats[["WHIM_hp"]]), ncol(assay_mats[["WHIM_hp"]])),
   columns = c(ncol(assay_mats[["WHIM_hp"]]), nrow(assay_mats[["WHIM_hp"]]))
 ) |>
