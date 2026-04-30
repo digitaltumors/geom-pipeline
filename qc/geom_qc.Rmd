@@ -1,10 +1,809 @@
 ---
-title: "GEOM Pipeline QC"
-output: html_document
+title: "GEOM WHIM Descriptor MAE QC"
+author: "Michael Tran"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
 ---
 
+This notebook demonstrates the structure and basic use of the final
+`MultiAssayExperiment` containing GEOM-derived WHIM descriptor assays and
+compound annotations.
+
+## Setup
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 8,
+  fig.height = 5
+)
+
+suppressPackageStartupMessages({
+  library(MultiAssayExperiment)
+  library(SummarizedExperiment)
+  library(S4Vectors)
+  library(dplyr)
+  library(tidyr)
+  library(tibble)
+  library(ggplot2)
+  library(knitr)
+  library(scales)
+  library(uwot)
+})
+
+theme_set(theme_minimal(base_size = 12))
+
+project_root <- normalizePath(
+  if (dir.exists("data/results")) "." else "..",
+  winslash = "/",
+  mustWork = TRUE
+)
+knitr::opts_knit$set(root.dir = project_root)
+
+mae_path <- file.path(
+  project_root,
+  "data",
+  "results",
+  "geom_MultiAssayExperiment.rds"
+)
+
+if (!file.exists(mae_path)) {
+  stop("MAE file not found: ", mae_path)
+}
+
+fmt_count <- function(x) {
+  format(x, big.mark = ",", scientific = FALSE, trim = TRUE)
+}
+
+fmt_number <- function(x, digits = 2) {
+  format(round(x, digits), big.mark = ",", scientific = FALSE, trim = TRUE)
+}
+
+fmt_percent <- function(x, digits = 1) {
+  paste0(format(round(100 * x, digits), nsmall = digits, trim = TRUE), "%")
+}
+
+is_present <- function(x) {
+  !is.na(x) & nzchar(trimws(as.character(x)))
+}
+
+sample_values <- function(matrix, n = 200000L) {
+  values <- as.vector(matrix)
+  values <- values[is.finite(values)]
+  if (length(values) > n) {
+    set.seed(20260430)
+    values <- sample(values, n)
+  }
+  values
+}
 ```
 
-## Placeholder
+## Load the MAE
+
+```{r load-data}
+mae <- readRDS(mae_path)
+
+assay_names <- names(experiments(mae))
+assay_mats <- setNames(
+  lapply(assay_names, \(assay_name) assay(experiments(mae)[[assay_name]])),
+  assay_names
+)
+
+compound_metadata <- as.data.frame(metadata(mae)$Drug.Metadata) |>
+  rownames_to_column("Compound.Key") |>
+  as_tibble()
+
+coldata <- as.data.frame(colData(mae)) |>
+  as_tibble()
+
+rowdata <- bind_rows(
+  lapply(assay_names, \(assay_name) {
+    as.data.frame(rowData(experiments(mae)[[assay_name]])) |>
+      as_tibble() |>
+      mutate(Assay = assay_name)
+  })
+)
+
+mae
+```
+
+## Dataset Overview
+
+```{r dataset-overview, class.source="fold-hide"}
+assay_summary <- tibble(
+  assay = assay_names,
+  assay_name = vapply(
+    assay_names,
+    \(assay_name) {
+      paste(assayNames(experiments(mae)[[assay_name]]), collapse = ", ")
+    },
+    character(1)
+  ),
+  features = vapply(
+    assay_names,
+    \(assay_name) nrow(assay_mats[[assay_name]]),
+    integer(1)
+  ),
+  compounds = vapply(
+    assay_names,
+    \(assay_name) ncol(assay_mats[[assay_name]]),
+    integer(1)
+  ),
+  feature_type = "WHIM descriptor features"
+)
+
+annotation_availability <- compound_metadata |>
+  mutate(
+    annotation_status = if_else(
+      In.AnnotationDB,
+      "AnnotationDB enriched",
+      "No AnnotationDB match",
+      missing = "No AnnotationDB match"
+    )
+  ) |>
+  count(annotation_status, name = "compounds") |>
+  mutate(
+    fraction = compounds / sum(compounds),
+    percent = scales::percent(fraction, accuracy = 0.1),
+    label = paste0(
+      annotation_status,
+      "\n",
+      scales::comma(compounds),
+      " (",
+      percent,
+      ")"
+    )
+  )
+
+overview_tbl <- tibble(
+  quantity = c(
+    "Pipeline ID",
+    "Pipeline version",
+    "Experiments",
+    "Assays",
+    "Compounds in colData",
+    "Drug metadata records",
+    "Source subsets",
+    "WHIM features per assay",
+    "Total assay columns",
+    "Compounds with PubChem CID",
+    "Compounds without PubChem CID",
+    "Median total conformers",
+    "Median unique conformers"
+  ),
+  value = c(
+    metadata(mae)$Pipeline$ID,
+    metadata(mae)$Pipeline$Version,
+    fmt_count(length(experiments(mae))),
+    paste(assay_names, collapse = ", "),
+    fmt_count(nrow(coldata)),
+    fmt_count(nrow(compound_metadata)),
+    paste(sort(unique(compound_metadata$GEOM.Source.Subset)), collapse = ", "),
+    fmt_count(unique(assay_summary$features)),
+    fmt_count(sum(assay_summary$compounds)),
+    fmt_count(sum(!is.na(compound_metadata$Pubchem.CID))),
+    fmt_count(sum(is.na(compound_metadata$Pubchem.CID))),
+    fmt_count(stats::median(compound_metadata$GEOM.Total.Conformers, na.rm = TRUE)),
+    fmt_count(stats::median(compound_metadata$GEOM.Unique.Conformers, na.rm = TRUE))
+  )
+)
+
+kable(overview_tbl)
+```
+
+```{r assay-summary}
+kable(assay_summary)
+```
+
+This MAE contains three WHIM descriptor assays. Rows are descriptor features and
+columns are compounds keyed by `GEOM.Source.SMILES`. The object is
+compound-level: each assay column represents one GEOM drug compound.
+
+## Inspect the MAE Structure
+
+The object layout is inspected directly below. The experiment container, assay
+names, compound-level metadata, sample map, and object-level metadata can all be
+accessed from the printed structure and the code shown in this section.
+
+```{r object-contents}
+mae
+
+experiments(mae)
+
+colnames(colData(mae))
+
+head(as.data.frame(sampleMap(mae)))
+
+names(metadata(mae))
+```
+
+The `sampleMap` has one row for each assay-compound pair. For every assay, both
+`primary` and `colname` are `GEOM.Source.SMILES`, so the same compound metadata
+row maps to that compound's column in each WHIM assay.
+
+## Compound Metadata
+
+```{r compound-metadata-head}
+compound_metadata |>
+  select(
+    GEOM.Source.SMILES,
+    Pubchem.CID,
+    InChIKey,
+    In.AnnotationDB,
+    AnnotationDB.Name,
+    GEOM.Source.Subset,
+    GEOM.Charge,
+    GEOM.Total.Conformers,
+    GEOM.Unique.Conformers,
+    GEOM.Lowest.Energy,
+    GEOM.Ensemble.Energy
+  ) |>
+  slice_head(n = 8) |>
+  kable()
+```
+
+The main fields commonly used in downstream analysis are:
+
+* `GEOM.Source.SMILES`: the GEOM source molecule key used as the MAE primary key and assay column name.
+* `Pubchem.CID`: the PubChem compound identifier used to join back to the base harmonized drug dataset.
+* `InChIKey`: the structure-level identifier derived from the representative GEOM conformer molecule.
+* `GEOM.RDKit.SMILES` and `GEOM.Canonical.SMILES`: RDKit-derived structures retained for comparison with the source key.
+* `In.AnnotationDB`: whether the compound mapped to AnnotationDB metadata.
+* `GEOM.Total.Conformers` and `GEOM.Unique.Conformers`: GEOM conformer counts carried into the compound-level metadata.
+* `GEOM.Lowest.Energy` and `GEOM.Ensemble.Energy`: GEOM energy summaries for the compound.
+
+```{r metadata-completeness}
+metadata_completeness <- compound_metadata |>
+  summarise(
+    across(
+      c(
+        Pubchem.CID,
+        InChIKey,
+        GEOM.RDKit.SMILES,
+        GEOM.Canonical.SMILES,
+        AnnotationDB.Name,
+        AnnotationDB.SMILES,
+        GEOM.Charge,
+        GEOM.Total.Conformers,
+        GEOM.Unique.Conformers,
+        GEOM.Lowest.Energy,
+        GEOM.Ensemble.Energy
+      ),
+      \(value) sum(is_present(value))
+    )
+  ) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "field",
+    values_to = "present"
+  ) |>
+  mutate(
+    missing = nrow(compound_metadata) - present,
+    percent_present = fmt_percent(present / nrow(compound_metadata))
+  ) |>
+  arrange(desc(present))
+
+kable(metadata_completeness)
+```
+
+```{r annotationdb-coverage, fig.height=4.5, fig.width=7}
+kable(
+  annotation_availability |>
+    select(annotation_status, compounds, percent)
+)
+
+ggplot(
+  annotation_availability,
+  aes(x = "", y = fraction, fill = annotation_status)
+) +
+  geom_col(width = 1, color = "white") +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    lineheight = 0.95
+  ) +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = c("#4C956C", "#C75C5C")) +
+  labs(
+    title = "AnnotationDB metadata availability for GEOM compounds",
+    fill = NULL
+  ) +
+  theme_void()
+```
+
+## Conformer Landscape
+
+GEOM provides conformer-level structure summaries. The MAE stores compound-level
+conformer counts and energy summaries in `colData`.
+
+```{r conformer-count-summary}
+conformer_summary_tbl <- compound_metadata |>
+  summarise(
+    compounds = n(),
+    total_conformer_min = min(GEOM.Total.Conformers, na.rm = TRUE),
+    total_conformer_median = stats::median(GEOM.Total.Conformers, na.rm = TRUE),
+    total_conformer_mean = mean(GEOM.Total.Conformers, na.rm = TRUE),
+    total_conformer_max = max(GEOM.Total.Conformers, na.rm = TRUE),
+    unique_conformer_min = min(GEOM.Unique.Conformers, na.rm = TRUE),
+    unique_conformer_median = stats::median(GEOM.Unique.Conformers, na.rm = TRUE),
+    unique_conformer_mean = mean(GEOM.Unique.Conformers, na.rm = TRUE),
+    unique_conformer_max = max(GEOM.Unique.Conformers, na.rm = TRUE)
+  ) |>
+  mutate(across(everything(), fmt_number))
+
+kable(conformer_summary_tbl)
+```
+
+```{r conformer-count-histogram, fig.height=4.5}
+compound_metadata |>
+  transmute(
+    `Total conformers` = pmax(GEOM.Total.Conformers, 1),
+    `Unique conformers` = pmax(GEOM.Unique.Conformers, 1)
+  ) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "count_type",
+    values_to = "conformers"
+  ) |>
+  ggplot(aes(x = conformers, fill = count_type)) +
+  geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
+  scale_x_log10(labels = scales::comma) +
+  scale_fill_manual(values = c("#8EA8C3", "#D49A3A")) +
+  labs(
+    title = "GEOM conformer count distribution",
+    x = "Conformers per compound",
+    y = "Number of compounds",
+    fill = NULL
+  )
+```
+
+```{r lowest-energy-plot, fig.height=4}
+compound_metadata |>
+  filter(is.finite(GEOM.Lowest.Energy)) |>
+  ggplot(aes(x = GEOM.Lowest.Energy)) +
+  geom_histogram(bins = 70, fill = "#3B6EA8", color = "white") +
+  labs(
+    title = "GEOM lowest conformer energy",
+    x = "Lowest energy",
+    y = "Number of compounds"
+  )
+```
+
+```{r ensemble-energy-plot, fig.height=4}
+compound_metadata |>
+  filter(is.finite(GEOM.Ensemble.Energy)) |>
+  ggplot(aes(x = GEOM.Ensemble.Energy)) +
+  geom_histogram(bins = 70, fill = "#6E9F64", color = "white") +
+  labs(
+    title = "GEOM ensemble energy",
+    x = "Ensemble energy",
+    y = "Number of compounds"
+  )
+```
+
+```{r charge-distribution, fig.height=4.5}
+compound_metadata |>
+  count(GEOM.Charge, name = "compounds") |>
+  ggplot(aes(x = factor(GEOM.Charge), y = compounds)) +
+  geom_col(fill = "#7D5BA6") +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    title = "Compound charge distribution",
+    x = "GEOM charge",
+    y = "Number of compounds"
+  )
+```
+
+```{r highest-conformer-counts}
+compound_metadata |>
+  arrange(desc(GEOM.Total.Conformers), GEOM.Source.SMILES) |>
+  select(
+    GEOM.Source.SMILES,
+    Pubchem.CID,
+    In.AnnotationDB,
+    GEOM.Total.Conformers,
+    GEOM.Unique.Conformers,
+    GEOM.Lowest.Energy,
+    GEOM.Ensemble.Energy
+  ) |>
+  slice_head(n = 12) |>
+  kable()
+```
+
+## WHIM Descriptor Assays
+
+```{r rowdata-head}
+rowdata |>
+  select(Assay, Feature.ID, Feature.Index, Assay.Name) |>
+  filter(Assay == "WHIM_hp") |>
+  slice_head(n = 6) |>
+  kable()
+```
+
+```{r assay-quality-summary}
+assay_quality_tbl <- bind_rows(
+  lapply(assay_names, \(assay_name) {
+    mat <- assay_mats[[assay_name]]
+    sampled_values <- sample_values(mat)
+    tibble(
+      assay = assay_name,
+      features = nrow(mat),
+      compounds = ncol(mat),
+      entries = length(mat),
+      missing_entries = sum(is.na(mat)),
+      non_finite_entries = sum(!is.finite(mat)),
+      sampled_min = min(sampled_values, na.rm = TRUE),
+      sampled_median = stats::median(sampled_values, na.rm = TRUE),
+      sampled_mean = mean(sampled_values, na.rm = TRUE),
+      sampled_max = max(sampled_values, na.rm = TRUE)
+    )
+  })
+) |>
+  mutate(
+    across(
+      c(features, compounds, entries, missing_entries, non_finite_entries),
+      fmt_count
+    ),
+    across(
+      c(sampled_min, sampled_median, sampled_mean, sampled_max),
+      \(value) fmt_number(value, 4)
+    )
+  )
+
+kable(assay_quality_tbl)
+```
+
+```{r descriptor-distribution, fig.height=5.5}
+descriptor_sample_tbl <- bind_rows(
+  lapply(assay_names, \(assay_name) {
+    tibble(
+      assay = assay_name,
+      value = sample_values(assay_mats[[assay_name]], n = 100000L)
+    )
+  })
+)
+
+ggplot(descriptor_sample_tbl, aes(x = value, fill = assay)) +
+  geom_histogram(bins = 70, color = "white", show.legend = FALSE) +
+  facet_wrap(~assay, scales = "free") +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    title = "Sampled WHIM descriptor value distributions",
+    x = "Descriptor value",
+    y = "Sampled entries"
+  )
+```
+
+```{r feature-variability, include=FALSE}
+feature_stats <- bind_rows(
+  lapply(assay_names, \(assay_name) {
+    mat <- assay_mats[[assay_name]]
+    tibble(
+      Assay = assay_name,
+      Feature.ID = rownames(mat),
+      Mean = rowMeans(mat, na.rm = TRUE),
+      SD = apply(mat, 1, stats::sd, na.rm = TRUE)
+    )
+  })
+) |>
+  left_join(rowdata, by = c("Assay", "Feature.ID")) |>
+  arrange(Assay, desc(SD))
+```
+
+```{r feature-variability-plot, fig.height=7, fig.width=9}
+feature_stats |>
+  group_by(Assay) |>
+  slice_max(SD, n = 12, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(
+    Feature.Label = reorder(Feature.ID, SD)
+  ) |>
+  ggplot(aes(x = SD, y = Feature.Label, fill = Assay)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~Assay, scales = "free_y") +
+  labs(
+    title = "Most variable WHIM descriptor features",
+    x = "Standard deviation across compounds",
+    y = "Feature"
+  )
+```
+
+## Descriptor-Space UMAP
+
+The UMAP below is a visualization of a reproducible sample of compounds using
+all three WHIM assay families. Each point is one compound-level descriptor
+profile.
+
+```{r descriptor-umap, fig.height=5.5, fig.width=7}
+set.seed(20260430)
+
+umap_compound_source <- compound_metadata |>
+  filter(GEOM.Source.SMILES %in% colnames(assay_mats[[assay_names[[1L]]]]))
+
+umap_sample_n <- min(3000L, nrow(umap_compound_source))
+
+umap_compounds <- umap_compound_source |>
+  slice_sample(n = umap_sample_n)
+
+umap_input <- do.call(
+  cbind,
+  lapply(assay_names, \(assay_name) {
+    mat <- assay_mats[[assay_name]][
+      ,
+      umap_compounds$GEOM.Source.SMILES,
+      drop = FALSE
+    ]
+    t(mat)
+  })
+)
+
+umap_input <- scale(umap_input)
+umap_input[is.na(umap_input)] <- 0
+
+umap_layout <- uwot::umap(
+  umap_input,
+  n_neighbors = 15,
+  min_dist = 0.2,
+  metric = "cosine",
+  n_threads = 1,
+  n_sgd_threads = 1,
+  verbose = FALSE
+)
+
+umap_tbl <- as_tibble(umap_layout, .name_repair = \(x) c("UMAP1", "UMAP2")) |>
+  bind_cols(
+    umap_compounds |>
+      select(
+        GEOM.Source.SMILES,
+        GEOM.Unique.Conformers,
+        GEOM.Total.Conformers
+      )
+  ) |>
+  mutate(Unique.Conformers.For.Color = pmax(GEOM.Unique.Conformers, 1))
+
+ggplot(
+  umap_tbl,
+  aes(
+    x = UMAP1,
+    y = UMAP2,
+    color = Unique.Conformers.For.Color
+  )
+) +
+  geom_point(alpha = 0.75, size = 1.2) +
+  scale_color_gradient(
+    low = "#D8E7F1",
+    high = "#1F5F8B",
+    trans = "log10",
+    labels = scales::comma
+  ) +
+  labs(
+    title = "UMAP of sampled GEOM WHIM descriptor profiles",
+    subtitle = paste0(
+      "Compound-level descriptors for ",
+      scales::comma(nrow(umap_tbl)),
+      " sampled compounds."
+    ),
+    x = "UMAP 1",
+    y = "UMAP 2",
+    color = "Unique\nconformers"
+  )
+```
+
+## Assay Relationship Checks
+
+The three WHIM assays use the same compounds and feature count, but summarize
+conformer information differently. The plot below compares normalized
+per-compound descriptor-vector distances between assay pairs.
+
+```{r assay-pair-distances, fig.height=5.5, fig.width=9}
+assay_pairs <- tribble(
+  ~pair, ~assay_a, ~assay_b, ~denominator_assay,
+  "WHIM_hp vs WHIMS_avg", "WHIM_hp", "WHIMS_avg", "WHIMS_avg",
+  "WHIM_hp vs WHIMS_wavg", "WHIM_hp", "WHIMS_wavg", "WHIMS_wavg",
+  "WHIMS_avg vs WHIMS_wavg", "WHIMS_avg", "WHIMS_wavg", "WHIMS_avg"
+)
+
+assay_distance_tbl <- bind_rows(
+  lapply(seq_len(nrow(assay_pairs)), \(index) {
+    difference <- assay_mats[[assay_pairs$assay_a[[index]]]] -
+      assay_mats[[assay_pairs$assay_b[[index]]]]
+    absolute_distance <- sqrt(colSums(difference * difference, na.rm = TRUE))
+    denominator_norm <- sqrt(
+      colSums(
+        assay_mats[[assay_pairs$denominator_assay[[index]]]]^2,
+        na.rm = TRUE
+      )
+    )
+
+    tibble(
+      pair = assay_pairs$pair[[index]],
+      normalized_distance = absolute_distance / pmax(
+        denominator_norm,
+        .Machine$double.eps
+      )
+    )
+  })
+)
+
+assay_distance_tbl |>
+  filter(normalized_distance > 0) |>
+  ggplot(aes(x = normalized_distance, fill = pair)) +
+  geom_histogram(bins = 80, color = "white", show.legend = FALSE) +
+  facet_wrap(~pair, scales = "free_y") +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    title = "Normalized pairwise distances between WHIM assay summaries",
+    subtitle = "Exact-zero distances are omitted to show the non-zero spread.",
+    x = "Normalized descriptor-vector distance",
+    y = "Number of compounds"
+  )
+```
+
+## High-Variance Descriptor Snapshot
+
+This heatmap shows the most variable descriptor rows across compounds with the
+largest number of unique conformers. Values are scaled by descriptor row for
+visualization.
+
+```{r descriptor-heatmap, fig.height=7, fig.width=9}
+top_heatmap_features <- feature_stats |>
+  arrange(desc(SD)) |>
+  slice_head(n = 36) |>
+  mutate(Feature.Key = paste(Assay, Feature.ID, sep = ": "))
+
+top_heatmap_compounds <- compound_metadata |>
+  arrange(desc(GEOM.Unique.Conformers), GEOM.Source.SMILES) |>
+  slice_head(n = 80) |>
+  pull(GEOM.Source.SMILES)
+
+heatmap_mat <- do.call(
+  rbind,
+  lapply(seq_len(nrow(top_heatmap_features)), \(index) {
+    assay_name <- top_heatmap_features$Assay[[index]]
+    feature_id <- top_heatmap_features$Feature.ID[[index]]
+    values <- assay_mats[[assay_name]][
+      feature_id,
+      top_heatmap_compounds,
+      drop = FALSE
+    ]
+    rownames(values) <- top_heatmap_features$Feature.Key[[index]]
+    values
+  })
+)
+
+heatmap_scaled <- t(scale(t(heatmap_mat)))
+heatmap_scaled[!is.finite(heatmap_scaled)] <- 0
+
+heatmap_tbl <- as.data.frame(heatmap_scaled) |>
+  rownames_to_column("Feature.Key") |>
+  as_tibble() |>
+  pivot_longer(
+    cols = -Feature.Key,
+    names_to = "GEOM.Source.SMILES",
+    values_to = "Scaled.Value"
+  ) |>
+  mutate(
+    Feature.Key = factor(Feature.Key, levels = rev(top_heatmap_features$Feature.Key)),
+    GEOM.Source.SMILES = factor(
+      GEOM.Source.SMILES,
+      levels = top_heatmap_compounds
+    )
+  )
+
+ggplot(
+  heatmap_tbl,
+  aes(x = GEOM.Source.SMILES, y = Feature.Key, fill = Scaled.Value)
+) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#3B6EA8",
+    mid = "white",
+    high = "#C75C5C",
+    midpoint = 0
+  ) +
+  labs(
+    title = "Scaled high-variance WHIM descriptor features",
+    x = "Compounds ordered by unique conformer count",
+    y = "Assay and feature",
+    fill = "Scaled\nvalue"
+  ) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    panel.grid = element_blank()
+  )
+```
+
+## Basic Access Patterns
+
+The MAE can be used directly as an analysis-ready compound descriptor resource.
+Most analyses will either use one WHIM assay at a time or concatenate assay
+families after confirming that the descriptor families are appropriate for the
+question.
+
+```{r access-one-compound}
+example_compound <- compound_metadata |>
+  filter(In.AnnotationDB) |>
+  arrange(desc(GEOM.Unique.Conformers), GEOM.Source.SMILES) |>
+  slice(1) |>
+  pull(GEOM.Source.SMILES)
+
+example_metadata <- compound_metadata |>
+  filter(GEOM.Source.SMILES == example_compound) |>
+  select(
+    GEOM.Source.SMILES,
+    Pubchem.CID,
+    InChIKey,
+    AnnotationDB.Name,
+    GEOM.Total.Conformers,
+    GEOM.Unique.Conformers,
+    GEOM.Lowest.Energy,
+    GEOM.Ensemble.Energy
+  )
+
+kable(example_metadata)
+```
+
+```{r access-one-descriptor-profile}
+example_descriptors <- bind_rows(
+  lapply(assay_names, \(assay_name) {
+    tibble(
+      Assay = assay_name,
+      Feature.ID = rownames(assay_mats[[assay_name]]),
+      value = assay_mats[[assay_name]][, example_compound]
+    )
+  })
+) |>
+  arrange(Assay, desc(abs(value))) |>
+  group_by(Assay) |>
+  slice_head(n = 3) |>
+  ungroup()
+
+kable(example_descriptors)
+```
+
+```{r access-pubchem-subset}
+pubchem_subset <- compound_metadata |>
+  filter(!is.na(Pubchem.CID)) |>
+  slice_head(n = 100) |>
+  pull(GEOM.Source.SMILES)
+
+whim_hp_subset <- assay_mats[["WHIM_hp"]][, pubchem_subset, drop = FALSE]
+
+tibble(
+  subset = "First 100 PubChem-mapped GEOM compounds",
+  compounds = ncol(whim_hp_subset),
+  features = nrow(whim_hp_subset)
+) |>
+  kable()
+```
+
+```{r modeling-matrix}
+tibble(
+  object = c("WHIM_hp feature_by_compound_matrix", "WHIM_hp compound_by_feature_matrix"),
+  rows = c(nrow(assay_mats[["WHIM_hp"]]), ncol(assay_mats[["WHIM_hp"]])),
+  columns = c(ncol(assay_mats[["WHIM_hp"]]), nrow(assay_mats[["WHIM_hp"]]))
+) |>
+  mutate(
+    rows = fmt_count(rows),
+    columns = fmt_count(columns)
+  ) |>
+  kable()
+```
+
+The compound-by-feature orientation is typically the convenient format for
+machine learning or clustering workflows, while the feature-by-compound
+orientation matches the stored `SummarizedExperiment` assays.
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```
