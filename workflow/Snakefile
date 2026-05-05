@@ -124,7 +124,7 @@ rule extract_rdkit_folder:
     shell:
         """
         mkdir -p {params.rawdata_dir}
-        tar -xzf {input.archive} -C {params.rawdata_dir}
+        tar -xf {input.archive} -C {params.rawdata_dir}
         """
 
 
