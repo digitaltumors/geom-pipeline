@@ -84,8 +84,8 @@ COMPOUND_METADATA = f"{PROC_METADATA_DIR}/drug_metadata_raw.tsv"
 CONFORMER_METADATA = f"{PROC_DIR}/conformers/conformer_metadata.tsv"
 COL_DATA = f"{PROC_METADATA_DIR}/colData_raw.csv"
 WHIM_HP = f"{PROC_DIR}/assays/WHIM_hp.csv"
-WHIMS_AVG = f"{PROC_DIR}/assays/WHIMS_avg.csv"
-WHIMS_WAVG = f"{PROC_DIR}/assays/WHIMS_wavg.csv"
+WHIM_AVG = f"{PROC_DIR}/assays/WHIM_avg.csv"
+WHIM_WAVG = f"{PROC_DIR}/assays/WHIM_wavg.csv"
 MAE_RDS = f"{RESULTS_DIR}/{DATASET_ID}_MultiAssayExperiment.rds"
 TABLE_DIR = f"{RESULTS_DIR}/{DATASET_ID}_tables"
 TABLE_ARCHIVE = f"{RESULTS_DIR}/{DATASET_ID}_tables.tar.gz"
@@ -168,8 +168,8 @@ rule process_geom:
         compound_master=COMPOUND_MASTER,
         conformer_metadata=CONFORMER_METADATA,
         whim_hp=WHIM_HP,
-        whims_avg=WHIMS_AVG,
-        whims_wavg=WHIMS_WAVG,
+        whim_avg=WHIM_AVG,
+        whim_wavg=WHIM_WAVG,
     params:
         rdkit_root=RDKIT_ROOT,
     script:
@@ -191,8 +191,8 @@ rule build_multiassayexperiment:
     input:
         compound_metadata=COMPOUND_METADATA,
         whim_hp=WHIM_HP,
-        whims_avg=WHIMS_AVG,
-        whims_wavg=WHIMS_WAVG,
+        whim_avg=WHIM_AVG,
+        whim_wavg=WHIM_WAVG,
         configfile="config/pipeline.yaml",
     output:
         mae_rds=MAE_RDS,

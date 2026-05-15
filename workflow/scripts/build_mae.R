@@ -186,14 +186,14 @@ experiments <- list(
     "WHIM_hp",
     geom_keys
   ),
-  WHIMS_avg = build_whim_experiment(
-    snakemake@input[["whims_avg"]],
-    "WHIMS_avg",
+  WHIM_avg = build_whim_experiment(
+    snakemake@input[["whim_avg"]],
+    "WHIM_avg",
     geom_keys
   ),
-  WHIMS_wavg = build_whim_experiment(
-    snakemake@input[["whims_wavg"]],
-    "WHIMS_wavg",
+  WHIM_wavg = build_whim_experiment(
+    snakemake@input[["whim_wavg"]],
+    "WHIM_wavg",
     geom_keys
   )
 )

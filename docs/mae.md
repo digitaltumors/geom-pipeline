@@ -4,7 +4,7 @@ The final object is written to `data/results/geom_MultiAssayExperiment.rds`. The
 
 | Component | Structure |
 | --- | --- |
-| Assays | `WHIM_hp`, `WHIMS_avg`, and `WHIMS_wavg`. |
+| Assays | `WHIM_hp`, `WHIM_avg`, and `WHIM_wavg`. |
 | Assay columns | `GEOM.Source.SMILES`, the GEOM source molecule key. |
 | Assay rows | WHIM descriptor features named `WHIM_001`, `WHIM_002`, and so on. |
 | sampleMap | One row per assay/compound pair with `assay`, `primary`, and `colname`; both `primary` and `colname` are `GEOM.Source.SMILES`. |

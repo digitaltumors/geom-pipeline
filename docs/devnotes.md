@@ -29,6 +29,6 @@
 
 ## Output Decisions
 
-- The three assays are WHIM summaries, not a top-three conformer selection: `WHIM_hp`, `WHIMS_avg`, and `WHIMS_wavg`.
+- The three assays are WHIM summaries, not a top-three conformer selection: `WHIM_hp`, `WHIM_avg`, and `WHIM_wavg`.
 - `conformer_metadata.tsv` preserves per-conformer GEOM metadata whether or not the conformer is valid for WHIM aggregation.
 - Output headers are normalized to public dot-style names only at MAE/export boundaries; internal intermediates may retain source-style names for traceability.

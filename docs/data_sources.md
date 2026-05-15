@@ -85,7 +85,7 @@ The workflow generates:
 - `data/procdata/metadata/colData_raw.csv`
 - `data/procdata/conformers/conformer_metadata.tsv`
 - `data/procdata/assays/WHIM_hp.csv`
-- `data/procdata/assays/WHIMS_avg.csv`
-- `data/procdata/assays/WHIMS_wavg.csv`
+- `data/procdata/assays/WHIM_avg.csv`
+- `data/procdata/assays/WHIM_wavg.csv`
 
 Final MAE-derived exports use public dot-style headers.

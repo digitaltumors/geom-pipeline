@@ -603,9 +603,9 @@ per-compound descriptor-vector distances between assay pairs.
 ```{r assay-pair-distances, fig.height=5.5, fig.width=9}
 assay_pairs <- tribble(
   ~pair                     , ~assay_a    , ~assay_b     , ~denominator_assay ,
-  "WHIM_hp vs WHIMS_avg"    , "WHIM_hp"   , "WHIMS_avg"  , "WHIMS_avg"        ,
-  "WHIM_hp vs WHIMS_wavg"   , "WHIM_hp"   , "WHIMS_wavg" , "WHIMS_wavg"       ,
-  "WHIMS_avg vs WHIMS_wavg" , "WHIMS_avg" , "WHIMS_wavg" , "WHIMS_avg"
+  "WHIM_hp vs WHIM_avg"   , "WHIM_hp"  , "WHIM_avg"  , "WHIM_avg"  ,
+  "WHIM_hp vs WHIM_wavg"  , "WHIM_hp"  , "WHIM_wavg" , "WHIM_wavg" ,
+  "WHIM_avg vs WHIM_wavg" , "WHIM_avg" , "WHIM_wavg" , "WHIM_avg"
 )
 
 assay_distance_tbl <- bind_rows(

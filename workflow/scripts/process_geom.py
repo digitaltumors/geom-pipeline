@@ -96,8 +96,8 @@ rdkit_root = Path(snakemake.params.rdkit_root)
 output_compound_master = Path(snakemake.output.compound_master)
 output_conformer_metadata = Path(snakemake.output.conformer_metadata)
 output_whim_hp = Path(snakemake.output.whim_hp)
-output_whims_avg = Path(snakemake.output.whims_avg)
-output_whims_wavg = Path(snakemake.output.whims_wavg)
+output_whim_avg = Path(snakemake.output.whim_avg)
+output_whim_wavg = Path(snakemake.output.whim_wavg)
 
 manifest_rows = read_manifest(manifest_path)
 if not manifest_rows:
@@ -145,8 +145,8 @@ whim_output_columns = ['Compound_ID', *whim_columns]
 output_compound_master.parent.mkdir(parents=True, exist_ok=True)
 output_conformer_metadata.parent.mkdir(parents=True, exist_ok=True)
 output_whim_hp.parent.mkdir(parents=True, exist_ok=True)
-output_whims_avg.parent.mkdir(parents=True, exist_ok=True)
-output_whims_wavg.parent.mkdir(parents=True, exist_ok=True)
+output_whim_avg.parent.mkdir(parents=True, exist_ok=True)
+output_whim_wavg.parent.mkdir(parents=True, exist_ok=True)
 
 metrics = {
 	'manifest_rows': len(manifest_rows),
@@ -169,11 +169,11 @@ with ExitStack() as stack:
 	whim_hp_handle = stack.enter_context(
 		output_whim_hp.open('w', newline='', encoding='utf-8')
 	)
-	whims_avg_handle = stack.enter_context(
-		output_whims_avg.open('w', newline='', encoding='utf-8')
+	whim_avg_handle = stack.enter_context(
+		output_whim_avg.open('w', newline='', encoding='utf-8')
 	)
-	whims_wavg_handle = stack.enter_context(
-		output_whims_wavg.open('w', newline='', encoding='utf-8')
+	whim_wavg_handle = stack.enter_context(
+		output_whim_wavg.open('w', newline='', encoding='utf-8')
 	)
 
 	compound_writer = csv.DictWriter(
@@ -183,16 +183,14 @@ with ExitStack() as stack:
 		conformer_handle, fieldnames=conformer_columns, delimiter='\t'
 	)
 	whim_hp_writer = csv.DictWriter(whim_hp_handle, fieldnames=whim_output_columns)
-	whims_avg_writer = csv.DictWriter(whims_avg_handle, fieldnames=whim_output_columns)
-	whims_wavg_writer = csv.DictWriter(
-		whims_wavg_handle, fieldnames=whim_output_columns
-	)
+	whim_avg_writer = csv.DictWriter(whim_avg_handle, fieldnames=whim_output_columns)
+	whim_wavg_writer = csv.DictWriter(whim_wavg_handle, fieldnames=whim_output_columns)
 
 	compound_writer.writeheader()
 	conformer_writer.writeheader()
 	whim_hp_writer.writeheader()
-	whims_avg_writer.writeheader()
-	whims_wavg_writer.writeheader()
+	whim_avg_writer.writeheader()
+	whim_wavg_writer.writeheader()
 
 	for row in manifest_rows:
 		pickle_path = resolve_pickle_path(rdkit_root, row)
@@ -307,8 +305,8 @@ with ExitStack() as stack:
 		if not whims:
 			blank_row = blank_whim_row(compound_id, whim_columns)
 			whim_hp_writer.writerow(blank_row)
-			whims_avg_writer.writerow(blank_row)
-			whims_wavg_writer.writerow(blank_row)
+			whim_avg_writer.writerow(blank_row)
+			whim_wavg_writer.writerow(blank_row)
 			metrics['compounds_without_valid_whims'] += 1
 			metrics['processed_compounds'] += 1
 			continue
@@ -325,13 +323,13 @@ with ExitStack() as stack:
 				**dict(zip(whim_columns, highest_prob_whim.tolist(), strict=True)),
 			}
 		)
-		whims_avg_writer.writerow(
+		whim_avg_writer.writerow(
 			{
 				'Compound_ID': compound_id,
 				**dict(zip(whim_columns, avg_whim.tolist(), strict=True)),
 			}
 		)
-		whims_wavg_writer.writerow(
+		whim_wavg_writer.writerow(
 			{
 				'Compound_ID': compound_id,
 				**dict(zip(whim_columns, weighted_avg_whim.tolist(), strict=True)),
